@@ -1,4 +1,7 @@
 {
+    "/8world/:category?": [
+        "nczitzk"
+    ],
     "/aamacau/aamacau/:category?/:id?": [
         "nczitzk"
     ],
@@ -19,6 +22,24 @@
     ],
     "/furstar/archive/:lang?": [
         "NeverBehave"
+    ],
+    "/icac/news/:lang?": [
+        "linbuxiao, TonyRL"
+    ],
+    "/jump/discount/:platform/:filter?/:countries?": [
+        "zytomorrow"
+    ],
+    "/ruancan/ruancan": [
+        "nczitzk"
+    ],
+    "/ruancan/ruancan/sort/:sort?": [
+        "nczitzk"
+    ],
+    "/ruancan/ruancan/tag/:tag": [
+        "nczitzk"
+    ],
+    "/ruancan/ruancan/search/:keyword?": [
+        "nczitzk"
     ],
     "/test/:id": [
         "DIYgod",
