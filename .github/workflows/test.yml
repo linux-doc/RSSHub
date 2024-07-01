@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  checks: write
 
 jobs:
   fix-pnpm-lock:
@@ -25,9 +26,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 8
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
@@ -58,9 +57,7 @@ jobs:
     name: Vitest on Node ${{ matrix.node-version }}
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 8
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
@@ -72,7 +69,7 @@ jobs:
       - name: Build routes
         run: pnpm build
       - name: Test all and generate coverage
-        run: pnpm run vitest:coverage
+        run: pnpm run vitest:coverage --reporter=github-actions
         env:
           REDIS_URL: redis://localhost:${{ job.services.redis.ports[6379] }}/
       - name: Upload coverage to Codecov
@@ -101,9 +98,7 @@ jobs:
     name: Vitest puppeteer on Node ${{ matrix.node-version }} with ${{ matrix.chromium.name }}
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 8
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
@@ -148,9 +143,7 @@ jobs:
     name: Build radar and maintainer on Node ${{ matrix.node-version }}
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 8
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
@@ -158,6 +151,11 @@ jobs:
       - run: pnpm i
       - name: Build radar and maintainer
         run: npm run build
+      - name: Upload assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-assets-${{ matrix.node-version }}
+          path: assets/build/
 
   automerge:
     if: github.triggering_actor == 'dependabot[bot]' && github.event_name == 'pull_request'
