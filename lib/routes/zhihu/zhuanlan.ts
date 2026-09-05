@@ -1,8 +1,10 @@
-import { Route } from '@/types';
-import got from '@/utils/got';
-import utils from './utils';
 import { load } from 'cheerio';
+
+import type { Route } from '@/types';
+import got from '@/utils/got';
 import { parseDate } from '@/utils/parse-date';
+
+import { getSignedHeader, header, processImage } from './utils';
 
 export const route: Route = {
     path: '/zhuanlan/:id',
@@ -10,7 +12,12 @@ export const route: Route = {
     example: '/zhihu/zhuanlan/googledevelopers',
     parameters: { id: '专栏 id，可在专栏主页 URL 中找到' },
     features: {
-        requireConfig: false,
+        requireConfig: [
+            {
+                name: 'ZHIHU_COOKIES',
+                description: '',
+            },
+        ],
         requirePuppeteer: false,
         antiCrawler: true,
         supportBT: false,
@@ -29,34 +36,40 @@ export const route: Route = {
 
 async function handler(ctx) {
     const id = ctx.req.param('id');
-
-    const listRes = await got({
-        method: 'get',
-        url: `https://www.zhihu.com/api/v4/columns/${id}/items`,
-        headers: {
-            ...utils.header,
-            Referer: `https://zhuanlan.zhihu.com/${id}`,
-        },
-    });
-
-    const pinnedRes = await got({
-        method: 'get',
-        url: `https://www.zhihu.com/api/v4/columns/${id}/pinned-items`,
-        headers: {
-            ...utils.header,
-            Referer: `https://zhuanlan.zhihu.com/${id}`,
-        },
-    });
-
-    listRes.data.data = [...listRes.data.data, ...pinnedRes.data.data];
-
     // 知乎专栏链接存在两种格式, 一种以 'zhuanlan.' 开头, 另一种新增的以 'c_' 结尾
     let url = `https://zhuanlan.zhihu.com/${id}`;
     if (id.search('c_') === 0) {
         url = `https://www.zhihu.com/column/${id}`;
     }
 
-    const infoRes = await got(url);
+    const signedHeader = await getSignedHeader(url, `/api/v4/columns/${id}/items`);
+    const listRes = await got({
+        method: 'get',
+        url: `https://www.zhihu.com/api/v4/columns/${id}/items`,
+        headers: {
+            ...signedHeader,
+            Referer: `https://zhuanlan.zhihu.com/${id}`,
+        },
+    });
+
+    const pinnedRes = await got({
+        method: 'get',
+        url: `https://www.zhihu.com/api/v4/columns/${id}/pinned-items/v2`,
+        headers: {
+            ...header,
+            ...signedHeader,
+            Referer: `https://zhuanlan.zhihu.com/${id}`,
+        },
+    });
+
+    listRes.data.data = [...listRes.data.data, ...pinnedRes.data.data];
+
+    const infoRes = await got(url, {
+        headers: {
+            ...signedHeader,
+            Referer: url,
+        },
+    });
     const $ = load(infoRes.data);
     const title = $('.css-zyehvu').text();
     const description = $('.css-1bnklpv').text();
@@ -65,15 +78,13 @@ async function handler(ctx) {
         // 当专栏内文章内容不含任何文字时, 返回空字符, 以免直接报错
         let description = '';
         if (item.content) {
-            const $ = load(item.content);
-            description = $.html();
+            description = processImage(item.content);
         }
-        $('img').css('max-width', '100%');
 
-        let title = '';
-        let link = '';
-        let author = '';
-        let pubDate = '';
+        let title: string;
+        let link: string;
+        let author: string;
+        let pubDate: Date;
 
         switch (item.type) {
             case 'answer':
