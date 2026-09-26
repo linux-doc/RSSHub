@@ -1,12 +1,30 @@
-import { Route } from '@/types';
+import { config } from '@/config';
+import type { Route } from '@/types';
+import { ViewType } from '@/types';
 import got from '@/utils/got';
 import { parseDate } from '@/utils/parse-date';
 
 export const route: Route = {
     path: '/topics/:type',
     categories: ['bbs'],
+    view: ViewType.Articles,
     example: '/v2ex/topics/latest',
-    parameters: { type: 'hot 或 latest' },
+    parameters: {
+        type: {
+            description: '主题类型',
+            options: [
+                {
+                    value: 'hot',
+                    label: '最热主题',
+                },
+                {
+                    value: 'latest',
+                    label: '最新主题',
+                },
+            ],
+            default: 'hot',
+        },
+    },
     features: {
         requireConfig: false,
         requirePuppeteer: false,
@@ -23,7 +41,11 @@ export const route: Route = {
 async function handler(ctx) {
     const type = ctx.req.param('type');
 
-    const { data } = await got(`https://www.v2ex.com/api/topics/${type}.json`);
+    const { data } = await got(`https://www.v2ex.com/api/topics/${type}.json`, {
+        headers: {
+            'user-agent': config.ua,
+        },
+    });
 
     let title;
     if (type === 'hot') {
@@ -44,6 +66,7 @@ async function handler(ctx) {
             link: item.url,
             author: item.member.username,
             comments: item.replies,
+            category: [item.node.title],
         })),
     };
 }

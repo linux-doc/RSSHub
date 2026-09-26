@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { toTitleCase, collapseWhitespace, convertDateToISO8601, getLocalhostAddress } from '@/utils/common-utils';
+
+import { collapseWhitespace, convertDateToISO8601, getLocalhostAddress, getSubPath, toTitleCase } from '@/utils/common-utils';
 
 describe('common-utils', () => {
     it('toTitleCase', () => {
@@ -19,7 +20,9 @@ describe('common-utils', () => {
         expect(convertDateToISO8601(date.toLocaleString())).toBe(expected);
         expect(convertDateToISO8601('Tue, 01 Jan 2019 08:00:00 UTC+8')).toBe(expected);
 
-        expect(convertDateToISO8601('Tue, 01 Jan 2019 00:00:00')).toBe(new Date(date.getTime() + new Date().getTimezoneOffset() * 60 * 1000).toISOString());
+        // no zone in the string, so it is read as local wall clock; `new Date(2019, 0, 1)` is
+        // that same wall clock, and carries the UTC offset in effect on that date rather than today's
+        expect(convertDateToISO8601('Tue, 01 Jan 2019 00:00:00')).toBe(new Date(2019, 0, 1).toISOString());
         // need to pass a function in order to use `toThrow`
         expect(() => {
             convertDateToISO8601('something invalid');
@@ -37,5 +40,10 @@ describe('common-utils', () => {
 
     it('getLocalhostAddress', () => {
         expect(getLocalhostAddress()).toBeInstanceOf(Array);
+    });
+
+    it('getSubPath', () => {
+        expect(getSubPath({ req: { path: '/test/abc' } })).toBe('/abc');
+        expect(getSubPath({ req: { path: '/test' } })).toBe('/');
     });
 });

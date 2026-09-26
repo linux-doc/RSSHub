@@ -1,11 +1,15 @@
-import { Route } from '@/types';
+import { load } from 'cheerio';
+
+import { config } from '@/config';
+import type { Route } from '@/types';
+import { ViewType } from '@/types';
 import cache from '@/utils/cache';
 import got from '@/utils/got';
-import { load } from 'cheerio';
 
 export const route: Route = {
     path: '/tab/:tabid',
     categories: ['bbs'],
+    view: ViewType.Articles,
     example: '/v2ex/tab/hot',
     parameters: { tabid: 'tab标签ID,在 URL 可以找到' },
     features: {
@@ -29,13 +33,16 @@ async function handler(ctx) {
     const response = await got({
         method: 'get',
         url: pageUrl,
+        headers: {
+            'user-agent': config.ua,
+        },
     });
 
     const $ = load(response.data);
     const links = $('span.item_title > a')
         .toArray()
         .slice(0, ctx.req.query('limit') ? Number.parseInt(ctx.req.query('limit')) : 10)
-        .map((link) => `${host}${$(link).attr('href').replace(/#.*$/, '')}`);
+        .map((link) => `${host}${$(link).attr('href')!.replace(/#.*$/, '')}`);
 
     const items = await Promise.all(
         links.map((link) =>
@@ -43,6 +50,9 @@ async function handler(ctx) {
                 const response = await got({
                     method: 'get',
                     url: link,
+                    headers: {
+                        'user-agent': config.ua,
+                    },
                 });
 
                 const $ = load(response.data);
