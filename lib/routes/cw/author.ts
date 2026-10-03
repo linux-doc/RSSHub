@@ -1,6 +1,6 @@
-import { Route } from '@/types';
+import type { Language, Route } from '@/types';
+
 import { baseUrl, parsePage } from './utils';
-import puppeteer from '@/utils/puppeteer';
 
 export const route: Route = {
     path: '/author/:channel',
@@ -9,7 +9,7 @@ export const route: Route = {
     parameters: { channel: '作者 ID，可在 URL 中找到' },
     features: {
         requireConfig: false,
-        requirePuppeteer: true,
+        requirePuppeteer: false,
         antiCrawler: true,
         supportBT: false,
         supportPodcast: false,
@@ -26,18 +26,14 @@ export const route: Route = {
 };
 
 async function handler(ctx) {
-    const browser = await puppeteer();
-
-    const { $, items } = await parsePage('author', browser, ctx);
-
-    await browser.close();
+    const { $, items } = await parsePage('author', ctx);
 
     return {
         title: $('head title').text(),
         description: $('.authorTxt').text(),
         link: `${baseUrl}/author/${ctx.req.param('channel')}`,
         image: $('.authorPhoto img').attr('src') || `${baseUrl}/assets_new/img/fbshare.jpg'`,
-        language: $('meta[property="og:locale"]').attr('content'),
+        language: $('meta[property="og:locale"]').attr('content') as Language,
         item: items,
     };
 }

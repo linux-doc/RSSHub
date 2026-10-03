@@ -1,0 +1,83 @@
+import { load } from 'cheerio';
+
+import type { Data, DataItem, Route } from '@/types';
+import { ViewType } from '@/types';
+import cache from '@/utils/cache';
+import ofetch from '@/utils/ofetch';
+import parser from '@/utils/rss-parser';
+
+export const route: Route = {
+    path: '/blog',
+    categories: ['programming'],
+    example: '/warp/blog',
+    url: 'warp.dev',
+    parameters: {},
+    features: {
+        requireConfig: false,
+        requirePuppeteer: false,
+        antiCrawler: false,
+        supportBT: false,
+        supportPodcast: false,
+        supportScihub: false,
+    },
+    radar: [
+        {
+            source: ['www.warp.dev'],
+            target: '/blog',
+        },
+    ],
+    name: 'Blog',
+    maintainers: ['cscnk52'],
+    handler,
+    description: 'Provides a better reading experience (full articles) over the official ones.',
+    view: ViewType.Notifications,
+};
+
+async function handler() {
+    const feed = await parser.parseURL('https://www.warp.dev/blog/feed.xml');
+    if (!feed.title) {
+        throw new Error('Warp blog feed has no title');
+    }
+
+    const items = await Promise.all(
+        feed.items.map((item) => {
+            const { link, title } = item;
+            if (!link || !title) {
+                throw new Error('Warp blog feed item has no link or title');
+            }
+            return cache.tryGet(link, async (): Promise<DataItem> => {
+                const data = await ofetch(link);
+                const $ = load(data);
+
+                const main = $('main');
+
+                // clean HTML
+                main.find('style').remove();
+                main.find('[style]').removeAttr('style');
+                main.find('[class]').removeAttr('class');
+                main.find('[id]').removeAttr('id');
+                main.find('[preload]').removeAttr('preload');
+                main.find('figcaption').remove();
+
+                // remove title, time and button
+                main.find('section').first().find('div').first().remove();
+
+                return {
+                    title,
+                    link,
+                    description: main.html(),
+                    pubDate: item.pubDate,
+                    author: item.creator,
+                };
+            });
+        })
+    );
+
+    return {
+        title: feed.title,
+        link: feed.link,
+        description: feed.description,
+        item: items,
+        language: 'en',
+    } satisfies Data;
+}

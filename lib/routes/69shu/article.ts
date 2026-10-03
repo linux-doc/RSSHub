@@ -1,14 +1,15 @@
 import { load } from 'cheerio';
+
+import type { DataItem, Route } from '@/types';
 import cache from '@/utils/cache';
 import ofetch from '@/utils/ofetch';
-import type { Route, DataItem } from '@/types';
 
 export const route: Route = {
     path: '/article/:id',
     name: '章节',
-    url: 'www.69shu.top',
+    url: 'www.69shuba.cx',
     maintainers: ['eternasuno'],
-    example: '/article/47117',
+    example: '/69shu/article/47117',
     parameters: { id: '小说 id, 可在对应小说页 URL 中找到' },
     categories: ['reading'],
     features: {
@@ -21,19 +22,20 @@ export const route: Route = {
     },
     radar: [
         {
-            source: ['www.69shu.top/book/:id.htm'],
+            source: ['www.69shuba.cx/book/:id.htm'],
             target: '/article/:id',
         },
     ],
     handler: async (ctx) => {
         const { id } = ctx.req.param();
-        const link = `https://www.69shu.top/book/${id}.htm`;
-        const $ = load(await get(link));
+        const link = `https://www.69shuba.cx/book/${id}.htm`;
+        const html = await get(link);
+        const $ = load(html);
 
         const item = await Promise.all(
             $('.qustime li>a')
-                .map((_, chapter) => createItem(chapter.attribs.href))
                 .toArray()
+                .map((chapter) => createItem(chapter.attribs.href))
         );
 
         return {
@@ -43,31 +45,33 @@ export const route: Route = {
             item,
             image: $('.bookimg2>img').attr('src'),
             author: $('.booknav2>p:first-of-type>a').text(),
-            language: 'zh-cn',
+            language: 'zh-CN',
         };
     },
 };
 
 const createItem = (url: string) =>
-    cache.tryGet(url, async () => {
-        const $ = load(await get(url));
-        const { articleid, chapterid, chaptername } = parseObject(/bookinfo\s?=\s?{[\S\s]+?}/, $('head>script:not([src])').text());
-        const decryptionMap = parseObject(/_\d+\s?=\s?{[\S\s]+?}/, $('.txtnav+script').text());
+    cache.tryGet(url, async (): Promise<DataItem> => {
+        const html = await get(url);
+        const $ = load(html);
+        const { articleid, chapterid, chaptername } = parseObject(/bookinfo\s?=\s?\{[\s\S]+?\}/, $('head>script:not([src])').text());
+        const decryptionMap = parseObject(/_\d+\s?=\s?\{[\s\S]+?\}/, $('.txtnav+script').text());
 
         return {
             title: chaptername,
             description: decrypt($('.txtnav').html() || '', articleid, chapterid, decryptionMap),
             link: url,
         };
-    }) as Promise<DataItem>;
+    });
 
 const get = async (url: string, encoding = 'gbk') => new TextDecoder(encoding).decode(await ofetch(url, { responseType: 'arrayBuffer' }));
 
-const parseObject = (reg: RegExp, str: string): Record<string, string> => {
-    const obj = {};
+const parseObject = (reg: RegExp, str: string) => {
+    const obj: Record<string, string> = {};
     const match = reg.exec(str);
     if (match) {
-        for (const line of match[0].matchAll(/(\w+):\s?["']?([\S\s]+?)["']?[\n,}]/g)) {
+        const matchedLines = match[0].matchAll(/(\w+):\s?["']?([\s\S]+?)["']?[\n,}]/g);
+        for (const line of matchedLines) {
             obj[line[1]] = line[2];
         }
     }
@@ -83,14 +87,17 @@ const decrypt = (txt: string, articleid: string, chapterid: string, decryptionMa
     const lineMap = {};
     const articleKey = Number(articleid) + 3_061_711;
     const chapterKey = Number(chapterid) + 3_421_001;
-    for (const key of Object.keys(decryptionMap)) {
-        lineMap[(Number(key) ^ chapterKey) - articleKey] = (Number(decryptionMap[key]) ^ chapterKey) - articleKey;
+    for (const [key, value] of Object.entries(decryptionMap)) {
+        lineMap[(Number(key) ^ chapterKey) - articleKey] = (Number(value) ^ chapterKey) - articleKey;
     }
 
     return txt
+        .replaceAll(/\u{2003}|\n/gu, '')
         .split('<br><br>')
-        .map((line, index, array) => (lineMap[index] ? array[lineMap[index]] : line))
-        .slice(1, -1)
-        .join('<br>')
-        .replaceAll(/\u2003|(<div[\S\s]*?<\/div>)/g, '');
+        .flatMap((line, index, array) => {
+            const mapped = lineMap[index];
+            return (mapped ? array[mapped] : line).split('<br>');
+        })
+        .slice(1, -2)
+        .join('<br><br>');
 };

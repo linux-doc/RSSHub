@@ -1,14 +1,11 @@
-import { Route } from '@/types';
-import { getCurrentPath } from '@/utils/helpers';
-const __dirname = getCurrentPath(import.meta.url);
-
-import cache from '@/utils/cache';
 import { config } from '@/config';
-import { parseDate } from '@/utils/parse-date';
-import { art } from '@/utils/render';
-import path from 'node:path';
-import { baseUrl, getChannel, getChannelMessages, getGuild } from './discord-api';
 import ConfigNotFoundError from '@/errors/types/config-not-found';
+import InvalidParameterError from '@/errors/types/invalid-parameter';
+import type { DataItem, Route } from '@/types';
+import { parseDate } from '@/utils/parse-date';
+
+import { baseUrl, getChannel, getChannelMessages, getGuild } from './discord-api';
+import { renderDescription } from './templates/message';
 
 export const route: Route = {
     path: '/channel/:channelId',
@@ -19,7 +16,7 @@ export const route: Route = {
         requireConfig: [
             {
                 name: 'DISCORD_AUTHORIZATION',
-                description: '',
+                description: 'Discord authorization header from the browser',
             },
         ],
         requirePuppeteer: false,
@@ -45,17 +42,21 @@ async function handler(ctx) {
     const { authorization } = config.discord;
     const channelId = ctx.req.param('channelId');
 
-    const channelInfo = await getChannel(channelId, authorization, cache.tryGet);
-    const messagesRaw = await getChannelMessages(channelId, authorization, cache.tryGet, ctx.req.query('limit') ?? 100);
-    const { name: channelName, topic: channelTopic, guild_id: guildId } = channelInfo;
+    const channelInfo = await getChannel(channelId, authorization);
+    const messagesRaw = await getChannelMessages(channelId, authorization, ctx.req.query('limit') ?? 100);
+    if (!('guild_id' in channelInfo) || !channelInfo.guild_id) {
+        throw new InvalidParameterError('Channel is not in a guild');
+    }
+    const { name: channelName, guild_id: guildId } = channelInfo;
+    const channelTopic = 'topic' in channelInfo ? channelInfo.topic : undefined;
 
-    const guildInfo = await getGuild(guildId, authorization, cache.tryGet);
+    const guildInfo = await getGuild(guildId, authorization);
     const { name: guildName, icon: guidIcon } = guildInfo;
 
-    const messages = messagesRaw.map((message) => ({
-        title: message.content,
-        description: art(path.join(__dirname, 'templates/message.art'), { message }),
-        author: `${message.author.username}#${message.author.discriminator}`,
+    const messages = messagesRaw.map((message): DataItem => ({
+        title: message.content.split('\n', 1)[0],
+        description: renderDescription({ message, guildInfo }),
+        author: `${message.author.global_name ?? message.author.username}(${message.author.username})`,
         pubDate: parseDate(message.timestamp),
         updated: message.edited_timestamp ? parseDate(message.edited_timestamp) : undefined,
         category: `#${channelName}`,
@@ -68,5 +69,6 @@ async function handler(ctx) {
         link: `${baseUrl}/channels/${guildId}/${channelId}`,
         image: `https://cdn.discordapp.com/icons/${guildId}/${guidIcon}.webp`,
         item: messages,
+        allowEmpty: true,
     };
 }

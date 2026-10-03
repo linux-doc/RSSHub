@@ -1,6 +1,6 @@
-import { Route } from '@/types';
+import type { Language, Route } from '@/types';
+
 import { baseUrl, parsePage } from './utils';
-import puppeteer from '@/utils/puppeteer';
 
 export const route: Route = {
     path: '/master/:channel',
@@ -9,7 +9,7 @@ export const route: Route = {
     parameters: { channel: '主頻道 ID，可在 URL 中找到' },
     features: {
         requireConfig: false,
-        requirePuppeteer: true,
+        requirePuppeteer: false,
         antiCrawler: false,
         supportBT: false,
         supportPodcast: false,
@@ -19,35 +19,31 @@ export const route: Route = {
     maintainers: ['TonyRL'],
     handler,
     description: `| 主頻道名稱 | 主頻道 ID |
-  | ---------- | --------- |
-  | 財經       | 8         |
-  | 產業       | 7         |
-  | 國際       | 9         |
-  | 管理       | 10        |
-  | 環境       | 12        |
-  | 教育       | 13        |
-  | 人物       | 14        |
-  | 政治社會   | 77        |
-  | 調查排行   | 15        |
-  | 健康關係   | 79        |
-  | 時尚品味   | 11        |
-  | 運動生活   | 103       |
-  | 重磅外媒   | 16        |`,
+| ---------- | --------- |
+| 財經       | 8         |
+| 產業       | 7         |
+| 國際       | 9         |
+| 管理       | 10        |
+| 環境       | 12        |
+| 教育       | 13        |
+| 人物       | 14        |
+| 政治社會   | 77        |
+| 調查排行   | 15        |
+| 健康關係   | 79        |
+| 時尚品味   | 11        |
+| 運動生活   | 103       |
+| 重磅外媒   | 16        |`,
 };
 
 async function handler(ctx) {
-    const browser = await puppeteer();
-
-    const { $, items } = await parsePage('master', browser, ctx);
-
-    await browser.close();
+    const { $, items } = await parsePage('master', ctx);
 
     return {
         title: $('head title').text(),
         description: $('meta[name=description]').attr('content'),
         link: `${baseUrl}/masterChannel.action?idMasterChannel=${ctx.req.param('channel')}`,
         image: `${baseUrl}/assets_new/img/fbshare.jpg`,
-        language: $('meta[property="og:locale"]').attr('content'),
+        language: $('meta[property="og:locale"]').attr('content') as Language,
         item: items,
     };
 }
