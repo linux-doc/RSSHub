@@ -1,6 +1,6 @@
-import { Route } from '@/types';
-import { parseDate } from '@/utils/parse-date';
+import type { Route } from '@/types';
 import got from '@/utils/got';
+import { parseDate } from '@/utils/parse-date';
 
 export const route: Route = {
     path: '/researchResults',
@@ -27,7 +27,7 @@ export const route: Route = {
 };
 
 async function handler() {
-    const response = await got({
+    const { status, statusMessage, data } = await got({
         method: 'post',
         url: 'https://research.ke.com/apis/consumer-access/index/contents/page',
         headers: {
@@ -38,8 +38,6 @@ async function handler() {
             pageSize: 9,
         },
     });
-
-    const { status, statusMessage, data } = response;
     if (status !== 200) {
         throw new Error(statusMessage);
     }

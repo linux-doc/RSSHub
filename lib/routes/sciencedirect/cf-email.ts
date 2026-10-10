@@ -1,9 +1,10 @@
+/* oxlint-disable unicorn/prefer-code-point */
 const decodeCFEmail = (encoded) => {
-    const parseHex = (string, position) => Number.parseInt(string.slice(position, position + 2), 16);
+    const parseHex = (position) => Number.parseInt(encoded.slice(position, position + 2), 16);
     let decoded = '';
-    const key = parseHex(encoded, 0);
+    const key = parseHex(0);
     for (let position = 2; position < encoded.length; position += 2) {
-        const byte = parseHex(encoded, position) ^ key;
+        const byte = parseHex(position) ^ key;
         decoded += String.fromCharCode(byte);
     }
     return decoded;
@@ -23,14 +24,12 @@ const encodeCFEmail = (email) => {
  * The alogrithm is well-explained in https://andrewlock.net/simple-obfuscation-of-email-addresses-using-javascript/
  */
 export {
-    // eslint-disable-next-line lines-around-comment
     /**
      * Returns decoded email address using CloudFlare's email address obfuscation.
      * @param {String} encoded - encoded email, (`cfemail` attribute in `__cf_email__` tag)
      * @returns decoded email address
      */
     decodeCFEmail,
-
     /**
      * Returns CloudFlare protected email address.
      * @param {String} email - email in plaintext

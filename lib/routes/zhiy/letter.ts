@@ -1,6 +1,7 @@
-import { Route } from '@/types';
+import type { Route } from '@/types';
 import got from '@/utils/got';
 import { parseDate } from '@/utils/parse-date';
+
 import { baseUrl, fetchUserDate } from './utils';
 
 export const route: Route = {
@@ -29,8 +30,7 @@ export const route: Route = {
 async function handler(ctx) {
     const author = ctx.req.param('author');
 
-    const userData = await fetchUserDate(author);
-    const { author_id: authorId, author_name: authorName, author_signature: authorSignature, author_avatar_url: authorAvatarUrl } = userData;
+    const { author_id: authorId, author_name: authorName, author_signature: authorSignature, author_avatar_url: authorAvatarUrl } = await fetchUserDate(author);
 
     const {
         data: { result: letters },

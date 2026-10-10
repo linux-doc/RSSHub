@@ -1,12 +1,24 @@
-import { Route } from '@/types';
+import type { Route } from '@/types';
 import { getSubPath } from '@/utils/common-utils';
+
 import { gdgov } from '../general/general';
 
 export const route: Route = {
-    path: '/maoming/*',
-    name: 'Unknown',
-    maintainers: [],
+    path: '/:path{.+}',
+    name: '门户网站',
+    example: '/gov/maoming/www/zwgk/zcjd/jd',
+    parameters: { path: '路径' },
+    maintainers: ['ShuiHuo'],
     handler,
+    description: `::: tip
+
+路径处填写对应页面 URL 中茂名有关政府网站的域名最前面的部分和域名后的字段。下面是一个例子。
+
+若订阅 [茂名市人民政府门户网站 > 政务公开 > 政策解读](http://www.maoming.gov.cn/zwgk/zcjd/jd/) 则将对应页面 URL <http://www.maoming.gov.cn/zwgk/zcjd/jd/> 中 \`http://www.maoming.gov.cn/\` 的字段 \`www\` 和 \`/zwgk/zcjd/jd/\` 作为路径填入。此时路由为 [\`/gov/maoming/www/zwgk/zcjd/jd/\`](https://rsshub.app/gov/maoming/www/zwgk/zcjd/jd/)
+
+若订阅 [茂名市农业农村局网站 > 政务区 > 政务公开 > 通知公告](http://mmny.maoming.gov.cn/zwq/zwgk/tzgg/) 则将对应页面 URL <http://mmny.maoming.gov.cn/zwq/zwgk/tzgg/> 中 \`http://mmny.maoming.gov.cn/\` 的字段 \`mmny\` 和 \`/zwq/zwgk/tzgg/\` 作为路径填入。此时路由为 [\`/gov/maoming/mmny/zwq/zwgk/tzgg/\`](https://rsshub.app/gov/maoming/mmny/zwq/zwgk/tzgg/)
+
+:::`,
 };
 
 async function handler(ctx) {
@@ -15,14 +27,14 @@ async function handler(ctx) {
         .filter((item) => item !== '');
     let pathstartat = 0;
     let defaultPath = '';
-    let list_element = '';
+    let list_element: string;
     let list_include = 'site';
-    let title_element = '';
+    let title_element: string;
     let title_match = '(.*)';
-    let description_element = '';
-    let authorisme = '';
-    let pubDate_element = '';
-    let pubDate_match = '';
+    let description_element: string;
+    let authorisme: string;
+    let pubDate_element: string;
+    let pubDate_match: string;
     // let pubDate_format = undefined;
     switch (path[1]) {
         case 'www':
@@ -97,6 +109,8 @@ async function handler(ctx) {
                         case undefined:
                             list_element = '#d11_li ul a[href*="content"], .two-o ul a[href*="content"]';
                             break;
+                        default:
+                            break;
                     }
                     break;
                 case 'zwgk':
@@ -109,9 +123,15 @@ async function handler(ctx) {
                                 case undefined:
                                     list_element = '.swiper-slide a, .bt a, .zcjdlist a';
                                     break;
+                                default:
+                                    break;
                             }
                             break;
+                        default:
+                            break;
                     }
+                    break;
+                default:
                     break;
             }
             title_element = '#ScDetailTitle';
@@ -142,7 +162,11 @@ async function handler(ctx) {
                         case undefined:
                             list_element = '.zw-news-list a';
                             break;
+                        default:
+                            break;
                     }
+                    break;
+                default:
                     break;
             }
             title_element = '.title';
@@ -168,6 +192,8 @@ async function handler(ctx) {
                         break;
                     case 'xwzx':
                         list_element = '.news_title li a, .news_title_ li a';
+                        break;
+                    default:
                         break;
                 }
             }
@@ -232,13 +258,15 @@ async function handler(ctx) {
                     case 'zwxx':
                         list_element = '.marqueetop a, .gud-file ul li a, .dyn-box ul li a, .org-list a';
                         break;
+                    default:
+                        break;
                 }
             }
             title_element = '.pre-box h3';
             description_element = '.pre-box .clearfix';
             authorisme = '茂名市人力资源和社会保障局网站';
             pubDate_element = '.pre-box > *:nth-child(3)';
-            pubDate_match = '发布时间:(.*) ';
+            pubDate_match = '发布时间:(.*)\u{A0}';
             break;
         case 'zrzyj':
             list_element = '.ul li a[href*="content"]';
@@ -286,13 +314,15 @@ async function handler(ctx) {
                         list_element = '.img a';
                     }
                     break;
+                default:
+                    break;
             }
             title_element = '.bt';
             title_match = '(.*)\n';
             description_element = '.lien > table > tbody > tr:nth-child(4)';
             authorisme = '茂名市农业农村局';
             pubDate_element = '.lien > table > tbody > tr:nth-child(2)';
-            pubDate_match = '日期：(.*)   点击数';
+            pubDate_match = '日期：(.*)\u{A0}\u{A0}\u{A0}点击数';
             break;
         case 'lyj':
             list_element = path[2] === undefined ? '#main-slide .changeDiv a, .lycneter_all a[href*="content"]' : '.r_text a';
@@ -300,7 +330,7 @@ async function handler(ctx) {
             description_element = '.time_r + div';
             authorisme = '茂名市林业局';
             pubDate_element = '.time_r';
-            pubDate_match = '发布时间：(.*)   文章来源';
+            pubDate_match = '发布时间：(.*)\u{A0}\u{A0}\u{A0}文章来源';
             break;
         case 'mmswj':
             list_element = path[2] === undefined ? 'div[id^="con_three_"] a, .pt6 a[href*="content"]' : '#main21l_main_dk > table a';
@@ -317,7 +347,7 @@ async function handler(ctx) {
             description_element = '.text-body';
             authorisme = '茂名市文化广电旅游体育局';
             pubDate_element = '.text-title p';
-            pubDate_match = '最后更新： (.*)    来源';
+            pubDate_match = '最后更新：\u{2002}(.*)\u{2002}\u{2002}\u{2002}\u{2002}来源';
             break;
         case 'wsjkj':
             list_element = path[2] === undefined ? '.tbv_mn a' : '.news_list a';
@@ -362,8 +392,10 @@ async function handler(ctx) {
             description_element = '#mmhygs';
             authorisme = '茂名市政务服务网';
             pubDate_element = '.HTime';
-            pubDate_match = '发布日期：(.*)   点击率';
+            pubDate_match = '发布日期：(.*)\u{A0}\u{A0}\u{A0}点击率';
             break;
+        default:
+            throw new Error(`Unknown path[1]: ${path[1]}`);
     }
     const info = {
         pathstartat,
@@ -378,5 +410,5 @@ async function handler(ctx) {
         pubDate_match,
         // pubDate_format,
     };
-    await gdgov(info, ctx);
+    return await gdgov(info, ctx);
 }

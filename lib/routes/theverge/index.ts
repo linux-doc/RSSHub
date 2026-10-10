@@ -1,8 +1,24 @@
-import { Route } from '@/types';
-import cache from '@/utils/cache';
-import got from '@/utils/got';
-import parser from '@/utils/rss-parser';
 import { load } from 'cheerio';
+
+import type { DataItem, Route } from '@/types';
+import cache from '@/utils/cache';
+import ofetch from '@/utils/ofetch';
+import parser from '@/utils/rss-parser';
+
+import { renderHeader } from './templates/header';
+
+const excludeTypes = new Set(['ActionBoxBlockType', 'FeaturedProductsBlockType', 'NewsletterBlockType', 'ProductsTableBlockType', 'RelatedPostsBlockType', 'TableOfContentsBlockType']);
+
+const shouldKeep = (b: any) => !excludeTypes.has(b.__typename);
+
+// Paragraphs and stream excerpts carry `paragraphContents`; headings, list items and pullquotes carry a single `contents`
+const renderContents = (b: any): string => (b.paragraphContents ?? [b.contents]).map((c) => c?.html ?? '').join('');
+
+const renderBlocks = (blocks: any[] | undefined, separator: string): string =>
+    (blocks ?? [])
+        .map((b) => renderBlock(b))
+        .filter(Boolean)
+        .join(separator);
 
 export const route: Route = {
     path: '/:hub?',
@@ -22,102 +38,136 @@ export const route: Route = {
             source: ['theverge.com/:hub', 'theverge.com/'],
         },
     ],
-    name: 'The Verge',
+    name: 'Category',
     maintainers: ['HenryQW', 'vbali'],
     handler,
-    description: `| Hub         | Hub name            |
-  | ----------- | ------------------- |
-  |             | All Posts           |
-  | android     | Android             |
-  | apple       | Apple               |
-  | apps        | Apps & Software     |
-  | blackberry  | BlackBerry          |
-  | culture     | Culture             |
-  | gaming      | Gaming              |
-  | hd          | HD & Home           |
-  | microsoft   | Microsoft           |
-  | photography | Photography & Video |
-  | policy      | Policy & Law        |
-  | web         | Web & Social        |
+    description: `| Hub            | Hub name       |
+| -------------- | -------------- |
+|                | All Posts      |
+| amazon         | Amazon         |
+| android        | Android        |
+| apple          | Apple          |
+| apps           | Apps           |
+| blackberry     | BlackBerry     |
+| business       | Business       |
+| creators       | Creators       |
+| culture        | Culture        |
+| entertainment  | Entertainment  |
+| film           | Film           |
+| games          | Gaming         |
+| google         | Google         |
+| health         | Health         |
+| meta           | Meta           |
+| microsoft      | Microsoft      |
+| music          | Music          |
+| policy         | Policy         |
+| reviews        | Reviews        |
+| samsung        | Samsung        |
+| science        | Science        |
+| space          | Space          |
+| streaming      | Streaming      |
+| tech           | Tech           |
+| transportation | Transportation |
+| tv             | TV Shows       |
+| web            | Web            |
 
-  Provides a better reading experience (full text articles) over the official one.`,
+Provides a better reading experience (full text articles) over the official one.`,
+};
+
+const renderBlock = (b) => {
+    if (!shouldKeep(b)) {
+        return '';
+    }
+    switch (b.__typename) {
+        case 'CoreEmbedBlockType':
+            return b.embedHtml;
+        case 'CoreGalleryBlockType':
+            return b.images.map((i) => `<figure><img src="${i.image.thumbnails.horizontal.url.split('?', 1)[0]}" alt="${i.alt}" /><figcaption>${i.caption.html}</figcaption></figure>`).join('');
+        case 'CoreHeadingBlockType':
+            return `<h${b.level}>${renderContents(b)}</h${b.level}>`;
+        case 'CoreHTMLBlockType':
+            return b.markup;
+        case 'CoreImageBlockType':
+            return `<figure><img src="${b.thumbnail.url.split('?', 1)[0]}" alt="${b.alt}" /><figcaption>${b.caption.html}</figcaption></figure>`;
+        case 'CoreListBlockType':
+            // a list nested in a quote comes through the GraphQL payload with no fields beyond __typename
+            return b.items?.length ? `${b.ordered ? '<ol>' : '<ul>'}${b.items.map((i) => `<li>${renderContents(i)}</li>`).join('')}${b.ordered ? '</ol>' : '</ul>'}` : '';
+        case 'CoreParagraphBlockType':
+            return renderContents(b);
+        case 'CorePullquoteBlockType':
+            return `<blockquote>${renderContents(b)}</blockquote>`;
+        case 'CoreQuoteBlockType':
+            return `<blockquote>${renderBlocks(b.children, '')}</blockquote>`;
+        case 'CoreSeparatorBlockType':
+            return '<hr>';
+        case 'HighlightBlockType':
+            return renderBlocks(b.children, '');
+        case 'ImageCompareBlockType':
+            return `<figure><img src="${b.leftImage.thumbnails.horizontal.url.split('?', 1)[0]}" alt="${b.leftImage.alt}" /><img src="${b.rightImage.thumbnails.horizontal.url.split('?', 1)[0]}" alt="${b.rightImage.alt}" /><figcaption>${b.caption.html}</figcaption></figure>`;
+        case 'ImageSliderBlockType':
+            return b.images.map((i) => `<figure><img src="${i.image.originalUrl.split('?', 1)[0]}" alt="${i.alt}" /><figcaption>${i.caption.html}</figcaption></figure>`).join('');
+        case 'MethodologyAccordionBlockType':
+            return `<h2>${b.heading.html}</h2>${b.sections.map((s) => `<h3>${s.heading.html}</h3>${s.content.html}`).join('')}`;
+        case 'ProductBlockType': {
+            const product = b.product;
+            return `<div><figure><img src="${product.image.thumbnails.horizontal.url.split('?', 1)[0]}" alt="${product.image.alt}" /><figcaption>${product.image.alt}</figcaption></figure><br><a href="${product.bestRetailLink.url}">${product.title} $${product.bestRetailLink.price}</a><br>${product.description.html}${product.pros.html ? `<br>The Good${product.pros.html}The Bad${product.cons.html}` : ''}</div>`;
+        }
+        case 'TableBlockType':
+            return `<table><tr>${b.header.map((cell) => `<th>${cell}</th>`).join('')}</tr>${b.rows.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`).join('')}</table>`;
+        case 'VideoBlockType':
+            return `<figure><iframe src="https://volume.vox-cdn.com/embed/${b.video.volumeUuid}" allowfullscreen></iframe>${b.caption?.html ? `<figcaption>${b.caption.html}</figcaption>` : ''}</figure>`;
+        default:
+            throw new Error(`Unsupported block type: ${b.__typename}`);
+    }
 };
 
 async function handler(ctx) {
-    const link = ctx.req.param('hub') ? `https://www.theverge.com/${ctx.req.param('hub')}/rss/index.xml` : 'https://www.theverge.com/rss/index.xml';
+    const link = ctx.req.param('hub') ? `https://www.theverge.com/rss/${ctx.req.param('hub')}/index.xml` : 'https://www.theverge.com/rss/index.xml';
 
     const feed = await parser.parseURL(link);
 
     const items = await Promise.all(
         feed.items.map((item) =>
-            cache.tryGet(item.link, async () => {
-                const response = await got(item.link);
+            cache.tryGet(item.link!, async () => {
+                const response = await ofetch(item.link!);
 
-                const $ = load(response.data);
+                const $ = load(response);
 
-                const content = $('#content');
-                const body = $('.duet--article--article-body-component-container');
+                const nextData = JSON.parse($('script#__NEXT_DATA__').text());
+                const node = nextData.props.pageProps.hydration.responses.find((x) => x.operationName === 'PostLayoutQuery' || x.operationName === 'StreamLayoutQuery').data.node;
 
-                // 处理封面图片
+                let description = renderHeader({
+                    featuredImage: node.featuredImage,
+                    ledeMediaData: node.ledeMediaData,
+                });
 
-                const cover = $('meta[property="og:image"]');
+                description += renderBlocks(node.blocks, '<br><br>');
 
-                if (cover.length > 0) {
-                    $(`<img src=${cover[0].attribs.content}>`).insertBefore(body[0].childNodes[0]);
+                if (node.__typename === 'StreamResourceType') {
+                    description += node.posts.edges
+                        .map(({ node: n }) => {
+                            let d =
+                                `<h2><a href="${n.permalink}">${n.promo.headline || n.title}</a></h2>` +
+                                renderHeader({
+                                    ledeMediaData: n.ledeMediaData,
+                                });
+                            switch (n.__typename) {
+                                case 'PostResourceType':
+                                    d += n.excerpt.map((e) => renderContents(e)).join('<br>');
+                                    break;
+                                case 'QuickPostResourceType':
+                                    d += renderBlocks(n.blocks, '<br>');
+                                    break;
+                                default:
+                                    break;
+                            }
+                            return d;
+                        })
+                        .join('<br>');
                 }
 
-                // 处理封面视频
-                $('div.l-col__main > div.c-video-embed, div.c-entry-hero > div.c-video-embed').each((i, e) => {
-                    const src = `https://volume.vox-cdn.com/embed/${e.attribs['data-volume-uuid']}?autoplay=false`;
-
-                    $(`<iframe src="${src}" style="border: 0; top: 0; left: 0; width: 100%; height: 100%; position: absolute;" allowfullscreen scrolling="no"></iframe>`).insertBefore(body[0].childNodes[0]);
-                });
-
-                // 处理封面视频
-                $('div.l-col__main > div.c-video-embed--media iframe').each((i, e) => {
-                    $(e).insertBefore(body[0].childNodes[0]);
-                });
-
-                // 处理文章图片
-                content.find('figure.e-image').each((i, e) => {
-                    let src, caption;
-
-                    // 处理 jpeg, png
-                    if ($(e).find('picture > source').length > 0) {
-                        src = $(e)
-                            .find('picture > img')[0]
-                            .attribs.srcset.match(/(?<=320w,).*?(?=520w)/g)[0]
-                            .trim();
-                    } else if ($(e).find('img.c-dynamic-image').length > 0) {
-                        // 处理 gif
-                        src = $(e).find('span.e-image__image')[0].attribs['data-original'];
-                    }
-
-                    // 处理 caption
-                    if ($(e).find('span.e-image__meta').length > 0) {
-                        caption = $(e).find('span.e-image__meta').text();
-                    }
-
-                    const figure = `<figure><img src=${src}>${caption ? `<br><figcaption>${caption}</figcaption>` : ''}</figure>`;
-
-                    $(figure).insertBefore(e);
-
-                    $(e).remove();
-                });
-
-                const lede = $('.duet--article--lede h2:first');
-                if (lede[0]) {
-                    lede.insertBefore(body[0].childNodes[0]);
-                }
-
-                // 移除无用 DOM
-                content.find('.duet--article--comments-join-the-conversation').remove();
-                content.find('.duet--recirculation--related-list').remove();
-                delete item.content;
-                delete item.contentSnippet;
-                delete item.isoDate;
-
-                item.description = body.html();
+                item.description = description;
+                item.category = node.categories?.map((c) => c.title);
 
                 return item;
             })
@@ -125,9 +175,9 @@ async function handler(ctx) {
     );
 
     return {
-        title: feed.title,
+        title: feed.title!,
         link: feed.link,
         description: feed.description,
-        item: items,
+        item: items as DataItem[],
     };
 }

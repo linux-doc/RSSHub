@@ -1,5 +1,19 @@
 {
-    "framework": null,
-    "github": { "silent": true },
-    "routes": [{ "src": "/.*", "dest": "/api/vercel.ts" }]
+    "$schema": "https://openapi.vercel.sh/vercel.json",
+    "framework": "hono",
+    "outputDirectory": "src",
+    "functions": {
+        "src/server.mjs": {
+            "includeFiles": "node_modules/.pnpm/patchright-core@*/node_modules/patchright-core/**"
+        }
+    },
+    "rewrites": [
+        {
+            "source": "/favicon.ico",
+            "destination": "/favicon.png"
+        }
+    ],
+    "github": {
+        "silent": true
+    }
 }

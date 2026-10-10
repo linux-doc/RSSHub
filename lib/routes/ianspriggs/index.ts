@@ -1,13 +1,13 @@
-import { Route } from '@/types';
-import { getCurrentPath } from '@/utils/helpers';
-const __dirname = getCurrentPath(import.meta.url);
+import { load } from 'cheerio';
 
+import InvalidParameterError from '@/errors/types/invalid-parameter';
+import type { Language, Route } from '@/types';
 import cache from '@/utils/cache';
 import got from '@/utils/got';
-import { load } from 'cheerio';
 import { parseDate } from '@/utils/parse-date';
-import { art } from '@/utils/render';
-import path from 'node:path';
+import { isValidHost } from '@/utils/valid-host';
+
+import { renderDescription } from './templates/description';
 
 export const route: Route = {
     path: '/:category?',
@@ -26,13 +26,17 @@ export const route: Route = {
     maintainers: ['nczitzk'],
     handler,
     description: `| 3D PORTRAITS | CHARACTERS |
-  | ------------ | ---------- |
-  | portraits    | characters |`,
+| ------------ | ---------- |
+| portraits    | characters |`,
 };
 
 async function handler(ctx) {
     const { category = 'portraits' } = ctx.req.param();
-    const limit = ctx.req.query('limit') ? Number.parseInt(ctx.req.query('limit'), 10) : 30;
+    if (!isValidHost(category)) {
+        throw new InvalidParameterError('Invalid category');
+    }
+
+    const limit = ctx.req.query('limit') ? Number(ctx.req.query('limit')) : 30;
 
     const author = 'Ian Spriggs';
     const rootUrl = 'https://ianspriggs.com';
@@ -46,33 +50,33 @@ async function handler(ctx) {
         .slice(0, limit)
         .toArray()
         .map((item) => {
-            item = $(item);
+            const $item = $(item);
 
-            const image = item.find('img').first();
+            const image = $item.find('img');
 
             return {
-                title: item.find('div.work-info').text(),
-                link: item.find('a').prop('href'),
-                description: art(path.join(__dirname, 'templates/description.art'), {
-                    images: image?.prop('src')
+                title: $item.find('div.work-info').text(),
+                link: $item.find('a').prop('href'),
+                description: renderDescription({
+                    images: image.prop('src')
                         ? [
                               {
-                                  src: image.prop('src').replace(/_thumbnail\./, '.'),
+                                  src: image.prop('src')!.replace(/_thumbnail\./, '.'),
                                   alt: image.prop('alt'),
                               },
                           ]
                         : undefined,
                 }),
                 author,
-                pubDate: parseDate(item.find('div.work-info p').last(), 'YYYY'),
-                enclosure_url: image?.prop('src') ?? undefined,
-                enclosure_type: image?.prop('src') ? 'image/jpeg' : undefined,
+                pubDate: parseDate($item.find('div.work-info p').text(), 'YYYY'),
+                enclosure_url: image.prop('src'),
+                enclosure_type: image.prop('src') ? 'image/jpeg' : undefined,
             };
         });
 
     items = await Promise.all(
         items.map((item) =>
-            cache.tryGet(item.link, async () => {
+            cache.tryGet(item.link!, async () => {
                 const { data: detailResponse } = await got(item.link);
 
                 const content = load(detailResponse);
@@ -80,20 +84,20 @@ async function handler(ctx) {
                 const images = content('div.work-item img')
                     .toArray()
                     .map((item) => {
-                        item = content(item);
+                        const $item = content(item);
 
                         return {
-                            src: item.prop('src').replace(/-\d+x\d+\./, '.'),
-                            alt: item.prop('alt'),
+                            src: $item.prop('src')!.replace(/-\d+x\d+\./, '.'),
+                            alt: $item.prop('alt'),
                         };
                     });
 
                 item.title = content('div.project-title').text();
-                item.description += art(path.join(__dirname, 'templates/description.art'), {
+                item.description += renderDescription({
                     images,
-                    description: content('div.nectar-fancy-ul').html(),
+                    description: content('div.nectar-fancy-ul').html() ?? undefined,
                 });
-                item.pubDate = parseDate(content('span.subheader').last().text(), 'YYYY');
+                item.pubDate = parseDate(content('span.subheader').text(), 'YYYY');
 
                 return item;
             })
@@ -107,7 +111,7 @@ async function handler(ctx) {
         title: $('title').text(),
         link: currentUrl,
         description: $('meta[property="og:description"]').prop('content'),
-        language: $('html').prop('lang'),
+        language: $('html').prop('lang') as Language,
         icon,
         logo: icon,
         subtitle: $('a[aria-current="page"] span.menu-title-text').text(),

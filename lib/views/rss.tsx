@@ -1,19 +1,27 @@
 import type { FC } from 'hono/jsx';
-import { Data } from '@/types';
+
+import type { Data } from '@/types';
 
 const RSS: FC<{ data: Data }> = ({ data }) => {
     const hasItunes = data.itunes_author || data.itunes_category || (data.item && data.item.some((i) => i.itunes_item_image || i.itunes_duration));
     const hasMedia = data.item?.some((i) => i.media);
+    const isTelegramLink = data.link?.startsWith('https://t.me/s/');
 
     return (
-        <rss xmlns:atom="http://www.w3.org/2005/Atom" xmlns:itunes={hasItunes ? 'http://www.itunes.com/dtds/podcast-1.0.dtd' : undefined} xmlns:media={hasMedia ? 'http://search.yahoo.com/mrss/' : undefined} version="2.0">
+        <rss
+            xmlns:atom="http://www.w3.org/2005/Atom"
+            xmlns:dc="http://purl.org/dc/elements/1.1/"
+            xmlns:itunes={hasItunes ? 'http://www.itunes.com/dtds/podcast-1.0.dtd' : undefined}
+            xmlns:media={hasMedia ? 'http://search.yahoo.com/mrss/' : undefined}
+            version="2.0"
+        >
             <channel>
                 <title>{data.title || 'RSSHub'}</title>
                 <link>{data.link || 'https://docs.rsshub.app'}</link>
                 <atom:link href={data.atomlink} rel="self" type="application/rss+xml" />
-                <description>{data.description || data.title} - Made with love by RSSHub(https://github.com/DIYgod/RSSHub)</description>
+                <description>{data.description || data.title} - Powered by RSSHub</description>
                 <generator>RSSHub</generator>
-                <webMaster>i@diygod.me (DIYgod)</webMaster>
+                <webMaster>contact@rsshub.app (RSSHub)</webMaster>
                 {data.itunes_author && <itunes:author>{data.itunes_author}</itunes:author>}
                 {data.itunes_category && <itunes:category text={data.itunes_category} />}
                 {data.itunes_author && <itunes:explicit>{data.itunes_explicit || 'false'}</itunes:explicit>}
@@ -23,6 +31,12 @@ const RSS: FC<{ data: Data }> = ({ data }) => {
                         <url>{data.image}</url>
                         <title>{data.title || 'RSSHub'}</title>
                         <link>{data.link}</link>
+                        {isTelegramLink && (
+                            <>
+                                <height>31</height>
+                                <width>88</width>
+                            </>
+                        )}
                     </image>
                 )}
                 <lastBuildDate>{data.lastBuildDate}</lastBuildDate>
@@ -34,11 +48,13 @@ const RSS: FC<{ data: Data }> = ({ data }) => {
                         <link>{item.link}</link>
                         <guid isPermaLink="false">{item.guid || item.link || item.title}</guid>
                         {item.pubDate && <pubDate>{item.pubDate}</pubDate>}
-                        {item.author && <author>{item.author}</author>}
+                        {item.author && <dc:creator>{item.author}</dc:creator>}
+                        {item.image && (item.enclosure_url || !item.attachments?.length) && <enclosure url={item.image} type="image/jpeg" />}
                         {item.itunes_item_image && <itunes:image href={item.itunes_item_image} />}
                         {item.enclosure_url && <enclosure url={item.enclosure_url} length={item.enclosure_length} type={item.enclosure_type} />}
+                        {!item.enclosure_url && item.attachments?.slice(0, 1).map((attachment) => <enclosure url={attachment.url} length={attachment.size_in_bytes ?? 0} type={attachment.mime_type} />)}
                         {item.itunes_duration && <itunes:duration>{item.itunes_duration}</itunes:duration>}
-                        {typeof item.category === 'string' ? <category>{item.category}</category> : item.category?.map((c) => <category>{c}</category>)}
+                        {item.category !== undefined && (Array.isArray(item.category) ? item.category : [item.category]).map((c) => <category>{c}</category>)}
                         {item.media &&
                             Object.entries(item.media).map(([key, value]) => {
                                 const Tag = `media:${key}`;

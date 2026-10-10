@@ -1,8 +1,10 @@
-import { Route } from '@/types';
-import cache from '@/utils/cache';
 import { load } from 'cheerio';
+
+import type { Route } from '@/types';
+import cache from '@/utils/cache';
 import { parseDate } from '@/utils/parse-date';
-import { baseUrl, puppeteerGet } from './utils';
+
+import { baseUrl, get } from './utils';
 
 export const route: Route = {
     path: '/category/:category?/:sort?',
@@ -37,8 +39,7 @@ async function handler(ctx) {
     url += (ctx.req.param('sort') && sortMap[ctx.req.param('sort')]) || 'recommend-1';
     url += ctx.req.param('category') ? '__category-' + ctx.req.param('category') : '';
 
-    // use Puppeteer due to the obstacle by cloudflare challenge
-    const html = await puppeteerGet(url, cache);
+    const html = await get(url, cache);
 
     const $ = load(html);
     const list = $('div.aw-item');
@@ -46,12 +47,10 @@ async function handler(ctx) {
     return {
         title: '品葱 - 发现',
         link: url,
-        item: list
-            .map((_, item) => ({
-                title: $(item).find('h4 a').text().trim(),
-                link: baseUrl + $(item).find('h4 a').attr('href'),
-                pubDate: parseDate($(item).attr('data-created-at') * 1000),
-            }))
-            .get(),
+        item: list.toArray().map((item) => ({
+            title: $(item).find('h4 a').text().trim(),
+            link: baseUrl + $(item).find('h4 a').attr('href'),
+            pubDate: parseDate(Number($(item).attr('data-created-at')) * 1000),
+        })),
     };
 }

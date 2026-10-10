@@ -1,16 +1,26 @@
-import { Route } from '@/types';
-import got from '@/utils/got';
 import { load } from 'cheerio';
-import { parseDate } from '@/utils/parse-date';
-import timezone from '@/utils/timezone';
+
+import { wafFetch } from '@/routes/mafengwo/utils';
+import type { Route } from '@/types';
+import { ViewType } from '@/types';
+import ofetch from '@/utils/ofetch';
+
+import { getHeaders, parseSearchDate } from './utils';
 
 export const route: Route = {
     path: '/keyword/:keyword',
     categories: ['shopping'],
+    view: ViewType.Notifications,
     example: '/smzdm/keyword/女装',
     parameters: { keyword: '你想订阅的关键词' },
     features: {
-        requireConfig: false,
+        requireConfig: [
+            {
+                name: 'SMZDM_COOKIE',
+                optional: true,
+                description: '什么值得买登录后的 Cookie 值',
+            },
+        ],
         requirePuppeteer: false,
         antiCrawler: false,
         supportBT: false,
@@ -25,20 +35,15 @@ export const route: Route = {
 async function handler(ctx) {
     const keyword = ctx.req.param('keyword');
 
-    const response = await got(`https://search.smzdm.com`, {
-        headers: {
-            Referer: `https://search.smzdm.com/?c=home&s=${encodeURIComponent(keyword)}&order=time&v=a`,
-        },
-        searchParams: {
-            c: 'home',
-            s: keyword,
-            order: 'time',
-            v: 'a',
-            mx_v: 'a',
-        },
-    });
-
-    const data = response.data;
+    const url = `https://search.smzdm.com/?${new URLSearchParams({
+        c: 'home',
+        s: keyword,
+        order: 'time',
+        v: 'a',
+        mx_v: 'a',
+    })}`;
+    const headers = getHeaders();
+    const data = await (headers.cookie ? ofetch<string>(url, { headers }) : wafFetch<string>(url));
 
     const $ = load(data);
     const list = $('.feed-row-wide');
@@ -46,15 +51,20 @@ async function handler(ctx) {
     return {
         title: `${keyword} - 什么值得买`,
         link: `https://search.smzdm.com/?c=home&s=${encodeURIComponent(keyword)}&order=time`,
-        item:
-            list &&
-            list.toArray().map((item) => {
-                item = $(item);
+        item: list
+            .toArray()
+            .filter((item) => $(item).find('.feed-block-title a').attr('href'))
+            .map((item) => {
+                const $item = $(item);
                 return {
-                    title: `${item.find('.feed-block-title a').eq(0).text().trim()} - ${item.find('.feed-block-title a').eq(1).text().trim()}`,
-                    description: `${item.find('.feed-block-descripe').contents().eq(2).text().trim()}<br>${item.find('.feed-block-extras span').text().trim()}<br><img src="http:${item.find('.z-feed-img img').attr('src')}">`,
-                    pubDate: timezone(parseDate(item.find('.feed-block-extras').contents().eq(0).text().trim(), ['MM-DD HH:mm', 'HH:mm']), +8),
-                    link: item.find('.feed-block-title a').attr('href'),
+                    title: `${$item.find('.feed-block-title a').eq(0).text().trim()} - ${$item.find('.z-highlight').text().trim()}`,
+                    description: `${$item.find('.feed-block-descripe-top').text()}<br>${$item.find('.feed-block-extras span').text()}<br><img src="http:${$item.find('.z-feed-img img').attr('src')}">`,
+                    category: $item
+                        .find('.feed-block-tags a')
+                        .toArray()
+                        .map((tag) => $(tag).text()),
+                    pubDate: parseSearchDate($item.find('.feed-block-extras').contents().eq(0).text().trim()),
+                    link: $item.find('.feed-block-title a').attr('href'),
                 };
             }),
     };
